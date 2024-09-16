@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swiss Lightning Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-geo/3.1.0/d3-geo.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="title">
+        <h1 class="title">Average lightning per month since 2004</h1>
+        <h2 class="description">Lorem ipsum dolor est lightning in Switzerland.</h2>
+    </div>
+    <div id="legend"></div>
+    <div id="map" class="map-container">
+    </div>
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        // Set up responsive dimensions
+        function calculateViewport() {
+            const isMobile = window.innerWidth <= 768;
+            return {
+                width: window.innerWidth * (isMobile ? 0.9 : 0.7),
+                height: window.innerHeight * (isMobile ? 0.3 : 0.7)
+            };
+        }
+
+        let viewport = calculateViewport();
+
+        // Update viewport on resize
+        window.addEventListener('resize', () => {
+            viewport = calculateViewport();
+            updateMap();
+        });
+
+        // Set up the map
+        const svg = d3.select("#map")
+            .append("svg")
+            .attr("width", viewport.width)
+            .attr("height", viewport.height)
+            .attr("aria-labelledby", "chartTitle chartDesc");
+
+        svg.append("title")
+            .attr("id", "chartTitle")
+            .text("Swiss Lightning Map");
+
+        svg.append("desc")
+            .attr("id", "chartDesc")
+            .text("This map visualizes lightning data across Swiss cantons.");
+
+        // Create a projection
+        let projection;
+        let path;
+
+        function updateMap() {
+            svg.attr("width", viewport.width)
+               .attr("height", viewport.height);
+
+            projection = d3.geoMercator()
+                .fitSize([viewport.width, viewport.height], geojsonData);
+
+            path = d3.geoPath().projection(projection);
+
+            // Update map elements
+            svg.selectAll("path")
+                .attr("d", path);
+
+            // Update labels
+            svg.selectAll("text")
+                .attr("transform", d => `translate(${path.centroid(d)})`);
+
+            // Update lightning icons
+            svg.selectAll("image")
+                .attr("transform", d => {
+                    const [x, y] = path.centroid(d);
+                    return `translate(${x},${y - 20})`;
+                });
+
+            // Reposition legend
+            positionLegendItems();
+        }
+
+        // Define color categories
+        let colorCategories;
+
+        // Load GeoJSON file
+        d3.json("./data/swiss_lightning.geojson").then((geojsonData) => {
+            projection = d3.geoMercator()
+                .fitSize([viewport.width, viewport.height], geojsonData);
+
+            path = d3.geoPath().projection(projection);
+
+            // Calculate the range of values
+            const values = geojsonData.features.map(d => +d.properties.kanton_lightning_qgis_Average);
+            const minValue = d3.min(values);
+            const maxValue = d3.max(values);
+
+            // Define color categories
+            colorCategories = [
+                { max: minValue + (maxValue - minValue) * 0.2, color: "#E8A5FF" },
+                { max: minValue + (maxValue - minValue) * 0.4, color: "#D385FF" },
+                { max: minValue + (maxValue - minValue) * 0.6, color: "#BE66FF" },
+                { max: minValue + (maxValue - minValue) * 0.8, color: "#A947FF" },
+                { max: maxValue, color: "#B92CFF" }
+            ];
+
+            // Create a color scale function
+            function getColor(value) {
+                for (let category of colorCategories) {
+                    if (value <= category.max) {
+                        return category.color;
+                    }
+                }
+                return colorCategories[colorCategories.length - 1].color;
+            }
+
+            // Draw the map
+            svg.selectAll("path")
+                .data(geojsonData.features)
+                .enter()
+                .append("path")
+                .attr("d", path)
+                .attr("fill", d => getColor(+d.properties.kanton_lightning_qgis_Average))
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 0.5)
+                .on("mouseover touchstart", showTooltip)
+                .on("mouseout touchend", hideTooltip);
+
+            // Add labels
+            svg.selectAll("text")
+                .data(geojsonData.features)
+                .enter()
+                .append("text")
+                .attr("transform", d => `translate(${path.centroid(d)})`)
+                .attr("dy", ".35em")
+                .attr("text-anchor", "middle")
+                .text(d => d.properties.NAME)
+                .attr("font-size", "10px")
+                .attr("font-family", "sans-serif");
+
+            // Add lightning icons for features with values over 4500
+            svg.selectAll("image")
+                .data(geojsonData.features.filter(d => +d.properties.kanton_lightning_qgis_Average > 4500))
+                .enter()
+                .append("image")
+                .attr("xlink:href", "./assets/lightning.svg")
+                .attr("width", 20)
+                .attr("height", 20)
+                .attr("transform", d => {
+                    const [x, y] = path.centroid(d);
+                    return `translate(${x},${y - 20})`;
+                })
+                .attr("x", -10)
+                .attr("y", -10);
+
+            // Create legend
+            createLegend();
+
+            // Call updateMap initially
+            updateMap();
+        }).catch(error => {
+            console.error("Error loading the GeoJSON file:", error);
+        });
+
+        function createLegend() {
+    const legend = d3.select("#legend");
+    
+    colorCategories.forEach((category, i) => {
+        const item = legend.append("div")
+            .attr("class", "legend-item");
+        
+        item.append("span")
+            .attr("class", "legend-color")
+            .style("background-color", category.color);
+        
+        item.append("span")
+            .attr("class", "legend-text")
+            .text(`≤ ${category.max.toFixed(0)}`);
+    });
+}
+
+        // Tooltip functions
+        function showTooltip(event, d) {
+            const tooltip = d3.select("#tooltip");
+            tooltip.style("opacity", 1)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px")
+                .html("") // Clear existing content
+                .append("div")
+                .attr("class", "tooltip-content")
+                .call(div => {
+                    div.append("p")
+                        .attr("class", "tooltip-title")
+                        .text(d.properties.NAME);
+                    div.append("p")
+                        .attr("class", "tooltip-value")
+                        .text(`Average lightning per year: ${d.properties.kanton_lightning_qgis_Average}`);
+                });
+        }
+
+        function hideTooltip() {
+            d3.select("#tooltip").style("opacity", 0);
+        }
+    </script>
+</body>
+</html>
