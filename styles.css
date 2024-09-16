@@ -48,6 +48,10 @@ body, html {
     justify-content: center;
 }
 
+.map-feature {
+    cursor: pointer;
+}
+
 .tooltip {
     position: absolute;
     padding: 10px;

@@ -123,6 +123,7 @@
                 .enter()
                 .append("path")
                 .attr("d", path)
+                .attr("class", "map-feature")
                 .attr("fill", d => getColor(+d.properties.kanton_lightning_qgis_Average))
                 .attr("stroke", "#fff")
                 .attr("stroke-width", 0.5)
