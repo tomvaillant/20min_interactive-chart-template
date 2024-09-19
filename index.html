@@ -31,15 +31,34 @@
         }
 
         let viewport = calculateViewport();
+        let svg, projection, path, geojsonData;
 
-        // Update viewport on resize
-        window.addEventListener('resize', () => {
+        // Update viewport and map on resize
+        function handleResize() {
             viewport = calculateViewport();
-            updateMap();
-        });
+            if (svg && geojsonData) {
+                updateMap();
+            }
+        }
+
+        // Debounce function to limit the rate of function calls
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Add event listener for window resize with debounce
+        window.addEventListener('resize', debounce(handleResize, 250));
 
         // Set up the map
-        const svg = d3.select("#map")
+        svg = d3.select("#map")
             .append("svg")
             .attr("width", viewport.width)
             .attr("height", viewport.height)
@@ -52,10 +71,6 @@
         svg.append("desc")
             .attr("id", "chartDesc")
             .text("This map visualizes lightning data across Swiss cantons.");
-
-        // Create a projection
-        let projection;
-        let path;
 
         function updateMap() {
             svg.attr("width", viewport.width)
@@ -89,7 +104,8 @@
         let colorCategories;
 
         // Load GeoJSON file
-        d3.json("./data/swiss_lightning.geojson").then((geojsonData) => {
+        d3.json("./data/swiss_lightning.geojson").then((data) => {
+            geojsonData = data;
             projection = d3.geoMercator()
                 .fitSize([viewport.width, viewport.height], geojsonData);
 
@@ -169,21 +185,25 @@
         });
 
         function createLegend() {
-    const legend = d3.select("#legend");
-    
-    colorCategories.forEach((category, i) => {
-        const item = legend.append("div")
-            .attr("class", "legend-item");
-        
-        item.append("span")
-            .attr("class", "legend-color")
-            .style("background-color", category.color);
-        
-        item.append("span")
-            .attr("class", "legend-text")
-            .text(`≤ ${category.max.toFixed(0)}`);
-    });
-}
+            const legend = d3.select("#legend");
+            
+            colorCategories.forEach((category, i) => {
+                const item = legend.append("div")
+                    .attr("class", "legend-item");
+                
+                item.append("span")
+                    .attr("class", "legend-color")
+                    .style("background-color", category.color);
+                
+                item.append("span")
+                    .attr("class", "legend-text")
+                    .text(`≤ ${category.max.toFixed(0)}`);
+            });
+        }
+
+        function positionLegendItems() {
+            // Implement positioning logic for legend items if needed
+        }
 
         // Tooltip functions
         function showTooltip(event, d) {
